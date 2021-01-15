@@ -3,7 +3,7 @@
 
 * Introducción
 Alfred es un servidor personal en el que tengo los siguientes servicios:
-+ Torrent box
++ [[Torrent box]]
 + NextCloud
 
 Más que un servicio pensado en producción, es un proyecto de aprendizaje y diversión.
@@ -18,6 +18,7 @@ La presente configuración se escribe para un Rapsberry Pi 4 B de 8 gigas de RAM
 + [[https://amzn.to/3oLoywQ][Tarjeta micro SD SanDisk Extreme de 32 Gb]]
 + [[https://amzn.to/38Jhg7o][Fuente de poder CanaKit USB-C de 5v y 3.5A]]
 + Coraza Canakit con disipadores de calor y enfriamiento activo para Rpi 4 (conectado en pines de 3 voltios para reducir ruido y consumo de energía)
++ Disco externo [[https://amzn.to/3bH5Anq][Toshiba Canvio Basics 2TB]]
 
 * Configuración inicial de hardware y sistema operativo
 Una vez se tenga ensamblado el Raspberry Pi (se recomienda usar enfriamiento activo con este [[https://amzn.to/3nLv2dX][kit]]), se debe instalar el sistema operativo. Esto se logra usando [[https://www.raspberrypi.org/software/][Raspberry Pi Imager]] (version 1.5) para instalar Ubuntu Server 20.10 LTS de 64 bits en la tarjeta micro SD.
@@ -83,13 +84,38 @@ sudo apt install fail2ban
 sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
 #+end_src
 
-Ahora tenemos que editar el archivo ~/etc/fail2ban/jail.local~ agregando las siguientes líneas
+Ahora tenemos que editar el archivo ~/etc/fail2ban/jail.local~ agregando las siguientes líneas:
+#+begin_src 
+[ssh]
+enabled  = true
+port     = ssh
+filter   = sshd
+logpath  = /var/log/auth.log
+maxretry = 3
+bantime = -1
+#+end_src
+
+** (Opcional) Agregar almacenamiento externo
+Para determinar la ubicación del disco externo se ejecuta ~lsblk~. Luego, se ejecutan los siguientes comando para definir punto de montaje del disco y hacer el montaje inicial.
+#+begin_src sh
+sudo mkdir /media/externo
+sudo mount -t ntfs-3g /dev/sda1 /media/externo
+#+end_src
+
+Para montar automáticamente, se agrega la siguiente línea a ~/etc/fstab~ (reemplanzando <xxx> con el ID del disco externo que se puede consultar ejecutando ~blkid /dev/sda1~):
+#+begin_src
+#Disco externo
+UUID=<xxx> /media/externo ntfs rw,auto,users,exec,nls=utf8,umask=003,gid=46,uid=1000    0   0
+#+end_src
 
 ** Software básico
 Como base para continuar con la configuración del servidor, vamos a instalar las siguientes aplicaciones:
 #+begin_src sh
 sudo apt install git emacs-nox docker
 #+end_src
+
+De aquí en adelante podemos clonar este repositorio en ~/home/juan~, abrir README.org en emacs local (a través de conexión ssh) y ejecutar los bloques sh en el servidor con ~C-c C-c~.
+
 
 * Footnotes
 
