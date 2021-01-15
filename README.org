@@ -1,6 +1,6 @@
 #+author: Juan E. Gómez-Morantes, PhD
 #+title: Configuración de Alfred
-#+PROPERTY: header-args:emacs-lisp :tangle ~/.emacsT
+#+PROPERTY: header-args:emacs-lisp :tangle ~/.emacs
 
 * Introducción
 Alfred es un servidor personal en el que tengo los siguientes servicios:
@@ -294,24 +294,7 @@ Instalación de íconos para usar en [[Emacs dashboard]] y otros paquetes.
 #+BEGIN_SRC emacs-lisp
   (use-package all-the-icons)
 #+END_SRC
-Luego de esto hay que correr =all-the-icons-install-fonts= desde emacs para instalar las fuentes.
-*** Origami
-Uso =origami= para definir bloques de contenido que sean colapsables. Inicialmente lo uso para colapsar bloques de =org-super-agenda=.
-#+BEGIN_SRC emacs-lisp
-  (use-package origami
-    :general (:keymaps 'org-super-agenda-header-map
-                       "<tab>" #'origami-toggle-node)
-    :config
-
-    :hook ((org-agenda-mode . origami-mode)))
-#+END_SRC 
-
-*** ibuffer
-#+BEGIN_SRC emacs-lisp
-  (use-package ibuffer
-    :config
-    (add-to-list 'evil-normal-state-modes 'ibuffer-mode))
-#+END_SRC
+Luego de esto hay que correr =all-the-icons-install-fonts= desde emacs para instalar las fuent
 ** magit
 #+begin_src emacs-lisp
   (use-package magit
@@ -332,6 +315,287 @@ Uso =origami= para definir bloques de contenido que sean colapsables. Inicialmen
       :config
       (counsel-projectile-mode)))
 #+end_src
+** Company
+  Company se usa para terminación en modos de programación o similares. La terminación se hace a partir de un diálogo flotante en el punto en donde se ingresa un término "terminable".
+
+  #+begin_src emacs-lisp
+    (use-package company
+      :defer 2
+      :config )
+  #+end_src
+
+** Ivy
+*** Configuración de Ivy
+**** Configuración inicial de Ivy
+Uso Ivy como framework de completitud. La configuración básica se muestra a continuación:
+#+BEGIN_SRC emacs-lisp
+  (use-package ivy
+    ;; Para que no liste a Ivy en la barra de modos activados
+    :diminish (ivy-mode . "")
+    :config
+    ;; Lo activa por defecto
+    (ivy-mode 1))
+#+END_SRC
+**** Configuración de Counsel
+Activo counsel y enlazo =M-x= a =counsel-M-x=. Con esto se logra ver los binds actuales de los comandos
+#+BEGIN_SRC emacs-lisp
+  (use-package counsel
+    :config
+    (global-set-key (kbd "M-x") 'counsel-M-x))
+#+END_SRC
+
+**** Ivy-rich y all-the-icons-ivy-rich
+Los siguientes paquetes se usan para agregar íconos a ivy. Por ejemplo, agrega íconos a la selección de buffers. 
+#+begin_src emacs-lisp
+  (use-package all-the-icons-ivy-rich
+    :init (all-the-icons-ivy-rich-mode 1))
+  (use-package ivy-rich
+    :init (ivy-rich-mode 1))
+#+end_src
+
+**** Prescient
+#+begin_src emacs-lisp
+  (use-package prescient
+    :config
+    (use-package ivy-prescient
+      :after counsel
+      :config
+      (ivy-prescient-mode)
+      (prescient-persist-mode)))
+#+end_src
+
+** evil
+*** Configuración básica
+Es necesario instalar y configurar =general=. =General= es un paquete que permite la definición de acordes usando teclas lideres (globales y locales) para diferentes modos (e.g. emacs, normal, insert, etc).
+#+BEGIN_SRC emacs-lisp
+  (use-package general
+    :config
+    ;; defniciión de tecla lider global para modo normal.
+    (general-create-definer leader
+      ;; :prefix leader
+      :states '(normal insert emacs)
+      :keymaps 'override
+      :prefix "SPC"
+      ;; tecla lider desde modos diferente a normal.
+      :non-normal-prefix "M-SPC")
+    ;; definición de tecla lider local (relativo al major mode) para modo normal.
+    (general-create-definer local-leader
+      ;; prefix local-leader.
+      :states '(normal insert emacs)
+      :prefix "SPC m"
+      ;; tecla lider local desde modos diferentes a normal
+      :non-normal-prefix "M-SPC m"))
+#+END_SRC 
+
+Ahora se carga =evil= y se hace la configuración inicial.
+#+BEGIN_SRC emacs-lisp
+  (use-package evil
+    :config
+    ;; Iniciar en modo NORMAL por defecto para todos los modos
+    (setq evil-default-state 'normal)
+    ;; Agregar modos extraños (que empiezan en E o M) a lista de modos visuales
+    (add-to-list 'evil-normal-state-modes 'help-mode)
+    (add-to-list 'evil-normal-state-modes 'help-mode)
+    ;; Arrancar emacs con evil-mode por defecto.
+    (evil-mode))
+#+END_SRC
+
+*** Evil-mc
+Evil-mc es un paquete que permite la creación de multiples cursores cuando se usa evil-mode. Esto se puede usar para hacer ediciones simultáneas en múltiples puntos del mismo /buffer/.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package evil-mc
+    :config
+    (global-evil-mc-mode  1))
+#+END_SRC
+
+*** Acordes globales
+**** Operaciones sobre archivos
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "f"
+    "" '(:ignore t :which-key "file")
+    "f" '(counsel-find-file :which-key "find-file")
+    "F" '(counsel-recentf :which-key "recentf")
+    "s" '(save-buffer :which-key "save-buffer")
+    "d" '(j/delete-file-and-buffer :which-key "j/delete-file-and-buffer")
+    "S" '(write-file :which-key "write-file"))
+#+END_SRC
+
+Algunas opciones de menú de archivo requieren funciones auxiliares:
+#+BEGIN_SRC emacs-lisp
+  (defun j/delete-file-and-buffer ()
+    "Eliminar el archivo actual del disco duro y cierra su buffer"
+    (interactive)
+    (let ((filename (buffer-file-name)))
+      (if filename
+          (if (y-or-n-p (concat "Do you really want to delete file " filename " ?"))
+              (progn
+                (delete-file filename)
+                (message "Deleted file %s." filename)
+                (kill-buffer)))
+        (message "Not a file visiting buffer!"))))
+#+END_SRC
+
+**** Operaciones sobre ventanas
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "w"
+    "" '(:ignore t :which-key "window")
+    "d" '(evil-window-delete :which-key "evil-window-delete")
+    "s" '(evil-window-split :which-key "evil-window-split")
+    "<" '(evil-window-decrease-width :which-key "reducir ancho")
+    ">" '(evil-window-increase-width :which-key "aumentar ancho")
+    "j" '(evil-window-down :which-key "evil-window-down")
+    "q" '(evil-quit-all :which-key "salir de emacs")
+    "k" '(evil-window-up :which-key "evil-window-up")
+    "h" '(evil-window-left :which-key "evil-window-left")
+    "l" '(evil-window-right :which-key "evil-window-right")
+    "o" '(delete-other-windows :which-key "delete-other-window")
+    "TAB" '(evil-window-next :which-key "evil-window-next")
+    "v" '(evil-window-vsplit :which-key "evil-window-vsplit"))
+#+END_SRC
+
+**** Operaciones sobre buffers
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "b"
+    "" '(:ignore t :which-key "buffer")
+    "d" '(kill-this-buffer :which-key "kill-this-buffer")
+    "k" '(previous-buffer :which-key "previous-buffer")
+    "-" '(text-scale-adjust :which-key "reducir fuente")
+    "+" '(text-scale-adjust :which-key "aumentar fuente")
+    "r" '(revert-buffer :which-key "revert-buffer")
+    "v" '(visual-line-mode :which-key "visual-line-mode")
+    "b" '(counsel-switch-buffer :which-key "ivy-switch-buffer")
+    "l" '(evil-switch-to-windows-last-buffer :which-key "evil-switch-to-windows-last-buffer")
+    "j" '(next-buffer :which-key "next-buffer"))
+#+END_SRC
+
+#+RESULTS:
+   
+**** Projectile
+#+begin_src emacs-lisp
+  (leader
+    "p" '(:keymap projectile-command-map :which-key "projectile"))
+#+end_src
+**** Menú de ayuda
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "h"
+    "" '(:ignore t :which-key "Help")
+    "m" '(describe-mode :which-key "describe-mode")
+    "f" '(counsel-describe-function :which-key "describe-function")
+    "v" '(counsel-describe-variable :which-key "describe-veariable")
+    "K" '(describe-key-briefly :which-key "describe-key-briefly")
+    "w" '(where-is :which-key "where-is")
+    "F" '(counsel-describe-face :which-key "describe-face")
+    "c" '(j/abrir-config :which-key "j/abrir-config")
+    "k" '(helpful-key :which-key "describe-key"))
+#+END_SRC
+
+Para completar algunas de las opciones definidas en el menú de ayuda se necesitan funciones auxiliares:
+
+#+BEGIN_SRC emacs-lisp
+  (defun j/abrir-config ()
+    "Abre el archivo de configuración"
+    (interactive)
+    (find-file "~/.emacs"))
+#+END_SRC
+    
+**** Operaciones sobre modos de edición
+#+BEGIN_SRC emacs-lisp
+  (leader
+    "SPC" '(evil-normal-state :which-key "evil-normal-state"))
+#+END_SRC
+**** Inserción de plantilla con =yasnippet=
+#+BEGIN_SRC emacs-lisp
+  (leader
+    "y" '(yas-insert-snippet :which-key "insertar plantilla"))
+#+END_SRC
+**** Edición
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "e"
+    "" '(:ignore t :which-key "edición")
+    "e" '(j/zen-mode :which-key "Zen mode"))
+#+END_SRC
+
+**** Movimiento
+Mapa de movimiento general (cualquier modo)
+#+begin_src emacs-lisp
+  (general-define-key
+   :states '(normal)
+   :infix "g"
+   "h" '(evil-beginning-of-line :which-key "evil-beginning-of-line")
+   "J" '(evil-goto-first-line :which-key "evil-goto-first-line")
+   "K" '(end-of-buffer :which-key "end-of-buffer")
+   "l" '(evil-end-of-line :which-key "evil-end-of-line"))
+#+end_src
+
+#+RESULTS:
+
+*** Menú de accesos directos
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "o"
+    "" '(:ignore t :which-key "open")
+    "a" '(org-agenda :which-key "agenda")
+    "d" '(dired :which-key "dired")
+    "b" '(eshell :which-key "eshell")
+    "t" '(org-todo-list :which-key "full TO-DO list"))
+#+END_SRC
+
+*** Acordes locales
+**** dashboard
+#+begin_src emacs-lisp 
+  (general-define-key
+   :states '(normal insert emacs)
+   :keymaps 'dashboard-mode-map
+   ;; Marcas 
+   "r" '(j/dashboard-goto-recent-files :which-key "archivos recientes")
+   "m" '(j/dashboard-goto-bookmarks :which-key "bookmarks")
+   "p" '(j/dashboard-goto-projects :which-key "projects")
+   "a" '(j/dashboard-goto-agenda :which-key "agenda"))
+
+  (defun j/dashboard-goto-recent-files ()
+    "Go to recent files."
+    (interactive)
+    (funcall (local-key-binding "r")))
+
+  (defun j/dashboard-goto-projects ()
+    "Go to projects."
+    (interactive)
+    (funcall (local-key-binding "p")))
+
+  (defun j/dashboard-goto-bookmarks ()
+    "Go to bookmarks."
+    (interactive)
+    (funcall (local-key-binding "m")))
+
+  (defun j/dashboard-goto-agenda ()
+    "Go to agenda."
+    (interactive)
+    (funcall (local-key-binding "a")))
+#+end_src
+
+**** helpful
+#+begin_src emacs-lisp
+  (general-define-key
+   :states '(normal insert emacs)
+   :keymaps '(helpful-mode-map)
+   "g" '(helpful-update :which-key "helpful-update")
+   "RET" '(helpful-visit-reference :which-key "seguir referencia")
+   "q" '(kill-buffer-and-window :which-key "salir"))
+#+end_src
+
+*** ibuffer
+#+BEGIN_SRC emacs-lisp
+ (use-package ibuffer
+    :config
+    (add-to-list 'evil-normal-state-modes
+            'ibuffer-mode))
+#+END_SRC
 ** Org-mode
 Orgmode es mi herramienta principal de trabajo. Lo uso para gestión de tareas, conocimiento, construcción de documentos, entre otros.
 
@@ -773,283 +1037,6 @@ La siguiente función dwim (do what I mean) se toma del [[https://github.com/hli
                return keywords)))
 #+end_src
    
-** Company
-  Company se usa para terminación en modos de programación o similares. La terminación se hace a partir de un diálogo flotante en el punto en donde se ingresa un término "terminable".
-
-  #+begin_src emacs-lisp
-    (use-package company
-      :defer 2
-      :config )
-  #+end_src
-
-** Ivy
-*** Configuración de Ivy
-**** Configuración inicial de Ivy
-Uso Ivy como framework de completitud. La configuración básica se muestra a continuación:
-#+BEGIN_SRC emacs-lisp
-  (use-package ivy
-    ;; Para que no liste a Ivy en la barra de modos activados
-    :diminish (ivy-mode . "")
-    :config
-    ;; Lo activa por defecto
-    (ivy-mode 1))
-#+END_SRC
-**** Configuración de Counsel
-Activo counsel y enlazo =M-x= a =counsel-M-x=. Con esto se logra ver los binds actuales de los comandos
-#+BEGIN_SRC emacs-lisp
-  (use-package counsel
-    :config
-    (global-set-key (kbd "M-x") 'counsel-M-x))
-#+END_SRC
-
-**** Ivy-rich y all-the-icons-ivy-rich
-Los siguientes paquetes se usan para agregar íconos a ivy. Por ejemplo, agrega íconos a la selección de buffers. 
-#+begin_src emacs-lisp
-  (use-package all-the-icons-ivy-rich
-    :init (all-the-icons-ivy-rich-mode 1))
-  (use-package ivy-rich
-    :init (ivy-rich-mode 1))
-#+end_src
-
-**** Prescient
-#+begin_src emacs-lisp
-  (use-package prescient
-    :config
-    (use-package ivy-prescient
-      :after counsel
-      :config
-      (ivy-prescient-mode)
-      (prescient-persist-mode)))
-#+end_src
-
-** evil
-*** Configuración básica
-Es necesario instalar y configurar =general=. =General= es un paquete que permite la definición de acordes usando teclas lideres (globales y locales) para diferentes modos (e.g. emacs, normal, insert, etc).
-#+BEGIN_SRC emacs-lisp
-  (use-package general
-    :config
-    ;; defniciión de tecla lider global para modo normal.
-    (general-create-definer leader
-      ;; :prefix leader
-      :states '(normal insert emacs)
-      :keymaps 'override
-      :prefix "SPC"
-      ;; tecla lider desde modos diferente a normal.
-      :non-normal-prefix "M-SPC")
-    ;; definición de tecla lider local (relativo al major mode) para modo normal.
-    (general-create-definer local-leader
-      ;; prefix local-leader.
-      :states '(normal insert emacs)
-      :prefix "SPC m"
-      ;; tecla lider local desde modos diferentes a normal
-      :non-normal-prefix "M-SPC m"))
-#+END_SRC 
-
-Ahora se carga =evil= y se hace la configuración inicial.
-#+BEGIN_SRC emacs-lisp
-  (use-package evil
-    :config
-    ;; Iniciar en modo NORMAL por defecto para todos los modos
-    (setq evil-default-state 'normal)
-    ;; Agregar modos extraños (que empiezan en E o M) a lista de modos visuales
-    (add-to-list 'evil-normal-state-modes 'help-mode)
-    (add-to-list 'evil-normal-state-modes 'help-mode)
-    (j/carga-condicional "pdf" 
-                         (add-to-list 'evil-normal-state-modes 'pdf-view-mode))
-    ;; Arrancar emacs con evil-mode por defecto.
-    (evil-mode))
-#+END_SRC
-
-*** Evil-mc
-Evil-mc es un paquete que permite la creación de multiples cursores cuando se usa evil-mode. Esto se puede usar para hacer ediciones simultáneas en múltiples puntos del mismo /buffer/.
-
-#+BEGIN_SRC emacs-lisp
-  (use-package evil-mc
-    :config
-    (global-evil-mc-mode  1))
-#+END_SRC
-
-*** Acordes globales
-**** Operaciones sobre archivos
-#+BEGIN_SRC emacs-lisp
-  (leader
-    :infix "f"
-    "" '(:ignore t :which-key "file")
-    "f" '(counsel-find-file :which-key "find-file")
-    "F" '(counsel-recentf :which-key "recentf")
-    "s" '(save-buffer :which-key "save-buffer")
-    "d" '(j/delete-file-and-buffer :which-key "j/delete-file-and-buffer")
-    "S" '(write-file :which-key "write-file"))
-#+END_SRC
-
-Algunas opciones de menú de archivo requieren funciones auxiliares:
-#+BEGIN_SRC emacs-lisp
-  (defun j/delete-file-and-buffer ()
-    "Eliminar el archivo actual del disco duro y cierra su buffer"
-    (interactive)
-    (let ((filename (buffer-file-name)))
-      (if filename
-          (if (y-or-n-p (concat "Do you really want to delete file " filename " ?"))
-              (progn
-                (delete-file filename)
-                (message "Deleted file %s." filename)
-                (kill-buffer)))
-        (message "Not a file visiting buffer!"))))
-#+END_SRC
-
-**** Operaciones sobre ventanas
-#+BEGIN_SRC emacs-lisp
-  (leader
-    :infix "w"
-    "" '(:ignore t :which-key "window")
-    "d" '(evil-window-delete :which-key "evil-window-delete")
-    "s" '(evil-window-split :which-key "evil-window-split")
-    "<" '(evil-window-decrease-width :which-key "reducir ancho")
-    ">" '(evil-window-increase-width :which-key "aumentar ancho")
-    "j" '(evil-window-down :which-key "evil-window-down")
-    "q" '(evil-quit-all :which-key "salir de emacs")
-    "k" '(evil-window-up :which-key "evil-window-up")
-    "h" '(evil-window-left :which-key "evil-window-left")
-    "l" '(evil-window-right :which-key "evil-window-right")
-    "o" '(delete-other-windows :which-key "delete-other-window")
-    "TAB" '(evil-window-next :which-key "evil-window-next")
-    "v" '(evil-window-vsplit :which-key "evil-window-vsplit"))
-#+END_SRC
-
-**** Operaciones sobre buffers
-#+BEGIN_SRC emacs-lisp
-  (leader
-    :infix "b"
-    "" '(:ignore t :which-key "buffer")
-    "d" '(kill-this-buffer :which-key "kill-this-buffer")
-    "k" '(previous-buffer :which-key "previous-buffer")
-    "-" '(text-scale-adjust :which-key "reducir fuente")
-    "+" '(text-scale-adjust :which-key "aumentar fuente")
-    "r" '(revert-buffer :which-key "revert-buffer")
-    "v" '(visual-line-mode :which-key "visual-line-mode")
-    "b" '(counsel-switch-buffer :which-key "ivy-switch-buffer")
-    "l" '(evil-switch-to-windows-last-buffer :which-key "evil-switch-to-windows-last-buffer")
-    "j" '(next-buffer :which-key "next-buffer"))
-#+END_SRC
-
-#+RESULTS:
-   
-**** Projectile
-#+begin_src emacs-lisp
-  (leader
-    "p" '(:keymap projectile-command-map :which-key "projectile"))
-#+end_src
-**** Menú de ayuda
-#+BEGIN_SRC emacs-lisp
-  (leader
-    :infix "h"
-    "" '(:ignore t :which-key "Help")
-    "m" '(describe-mode :which-key "describe-mode")
-    "f" '(counsel-describe-function :which-key "describe-function")
-    "v" '(counsel-describe-variable :which-key "describe-veariable")
-    "K" '(describe-key-briefly :which-key "describe-key-briefly")
-    "w" '(where-is :which-key "where-is")
-    "F" '(counsel-describe-face :which-key "describe-face")
-    "c" '(j/abrir-config :which-key "j/abrir-config")
-    "k" '(helpful-key :which-key "describe-key"))
-#+END_SRC
-
-Para completar algunas de las opciones definidas en el menú de ayuda se necesitan funciones auxiliares:
-
-#+BEGIN_SRC emacs-lisp
-  (defun j/abrir-config ()
-    "Abre el archivo de configuración"
-    (interactive)
-    (find-file "~/.emacs"))
-#+END_SRC
-    
-**** Operaciones sobre modos de edición
-#+BEGIN_SRC emacs-lisp
-  (leader
-    "SPC" '(evil-normal-state :which-key "evil-normal-state"))
-#+END_SRC
-**** Inserción de plantilla con =yasnippet=
-#+BEGIN_SRC emacs-lisp
-  (leader
-    "y" '(yas-insert-snippet :which-key "insertar plantilla"))
-#+END_SRC
-**** Edición
-#+BEGIN_SRC emacs-lisp
-  (leader
-    :infix "e"
-    "" '(:ignore t :which-key "edición")
-    "e" '(j/zen-mode :which-key "Zen mode"))
-#+END_SRC
-
-**** Movimiento
-Mapa de movimiento general (cualquier modo)
-#+begin_src emacs-lisp
-  (general-define-key
-   :states '(normal)
-   :infix "g"
-   "h" '(evil-beginning-of-line :which-key "evil-beginning-of-line")
-   "J" '(evil-goto-first-line :which-key "evil-goto-first-line")
-   "K" '(end-of-buffer :which-key "end-of-buffer")
-   "l" '(evil-end-of-line :which-key "evil-end-of-line"))
-#+end_src
-
-#+RESULTS:
-
-*** Menú de accesos directos
-#+BEGIN_SRC emacs-lisp
-  (leader
-    :infix "o"
-    "" '(:ignore t :which-key "open")
-    "a" '(org-agenda :which-key "agenda")
-    "d" '(dired :which-key "dired")
-    "b" '(eshell :which-key "eshell")
-    "t" '(org-todo-list :which-key "full TO-DO list"))
-#+END_SRC
-
-*** Acordes locales
-**** dashboard
-#+begin_src emacs-lisp 
-  (general-define-key
-   :states '(normal insert emacs)
-   :keymaps 'dashboard-mode-map
-   ;; Marcas 
-   "r" '(j/dashboard-goto-recent-files :which-key "archivos recientes")
-   "m" '(j/dashboard-goto-bookmarks :which-key "bookmarks")
-   "p" '(j/dashboard-goto-projects :which-key "projects")
-   "a" '(j/dashboard-goto-agenda :which-key "agenda"))
-
-  (defun j/dashboard-goto-recent-files ()
-    "Go to recent files."
-    (interactive)
-    (funcall (local-key-binding "r")))
-
-  (defun j/dashboard-goto-projects ()
-    "Go to projects."
-    (interactive)
-    (funcall (local-key-binding "p")))
-
-  (defun j/dashboard-goto-bookmarks ()
-    "Go to bookmarks."
-    (interactive)
-    (funcall (local-key-binding "m")))
-
-  (defun j/dashboard-goto-agenda ()
-    "Go to agenda."
-    (interactive)
-    (funcall (local-key-binding "a")))
-#+end_src
-
-**** helpful
-#+begin_src emacs-lisp
-  (general-define-key
-   :states '(normal insert emacs)
-   :keymaps '(helpful-mode-map)
-   "g" '(helpful-update :which-key "helpful-update")
-   "RET" '(helpful-visit-reference :which-key "seguir referencia")
-   "q" '(kill-buffer-and-window :which-key "salir"))
-#+end_src
-
-
 * Footnotes
 
 [fn:2] Las líneas de comentario se agregan para tener una explicación de la tarea cron y cuándo se va a ejecutar. 
