@@ -1,5 +1,6 @@
-#+author: Juan E. Gómez-Morantes
+#+author: Juan E. Gómez-Morantes, PhD
 #+title: Configuración de Alfred
+#+PROPERTY: header-args:emacs-lisp :tangle ~/.emacsT
 
 * Introducción
 Alfred es un servidor personal en el que tengo los siguientes servicios:
@@ -111,10 +112,942 @@ UUID=<xxx> /media/externo ntfs rw,auto,users,exec,nls=utf8,umask=003,gid=46,uid=
 ** Software básico
 Como base para continuar con la configuración del servidor, vamos a instalar las siguientes aplicaciones:
 #+begin_src sh
-sudo apt install git emacs-nox docker
+sudo apt install git emacs-nox docker docker.io
 #+end_src
 
 De aquí en adelante podemos clonar este repositorio en ~/home/juan~, abrir README.org en emacs local (a través de conexión ssh) y ejecutar los bloques sh en el servidor con ~C-c C-c~.
+
+* Configuración de emacs
+Para usar emacs para la configuración del resto de servidor vamos a crear una configuración mínima que nos facilite la vida. Para desplegarla tenemos que abrir este archivo en emacs y ejecutar ~M-x org-babel-tagle~
+** use-package y straight
+#+begin_src emacs-lisp
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+      (bootstrap-version 5))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/raxod502/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Cargar el org de straight
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(straight-use-package 'use-package)
+(setq straight-use-package-by-default t)
+(use-package org
+  :config)
+#+end_src
+** Interfaz básica
+*** Quitar barra de menu y de herramientas
+La barra de menú quita espacio y nunca la uso. Además, en terminar no se muestran barras y íconos.
+  
+#+BEGIN_SRC emacs-lisp 
+  (menu-bar-mode -1)
+  (tool-bar-mode -1)
+#+END_SRC
+
+*** Configuración de tema gráfico
+Luego de leer https://observer.com/2015/02/meet-the-man-behind-solarized-the-most-important-color-scheme-in-computer-history/, me decidí por Solarized como tema gráfico.
+
+Intenté con solarized-themes, pero usaba fuente no-mono y además los colores en orgmode eran horribles. Uso, entonces, doom-themes.
+
+Para ambientes tty usa misterioso
+#+BEGIN_SRC emacs-lisp
+  (if (display-graphic-p)
+      (use-package doom-themes
+        :config
+        ;; Global settings (defaults)
+        (setq doom-themes-enable-bold t    ; if nil, bold is universally disabled
+              doom-themes-enable-italic t) ; if nil, italics is universally disabled
+        (load-theme 'doom-solarized-dark t))
+    (load-theme 'misterioso t))
+#+END_SRC
+
+*** which-key
+=Which-key= es un paquete que muestra los acordes disponibles luego de iniciar un acorde normal o tipo vim. Lo que hace es mostrar un diálogo que muestra las opciones disponibles luego de iniciar un comando. Por ejemplo, si se presiona =C-c=, =which-key= muestra un diálogo con todos los comandos que se pueden ejecutar luego de =C-c= y la descripción de la función a ejecutar. También muestra comando que abren más opciones (e.g. =C-c C-x=). 
+#+BEGIN_SRC emacs-lisp
+  (use-package which-key
+    :config
+    (which-key-mode))
+#+END_SRC
+ 
+*** Word wrapping por defecto
+#+BEGIN_SRC emacs-lisp
+  (global-visual-line-mode)
+#+END_SRC
+*** Auto-revert por defecto
+#+BEGIN_SRC emacs-lisp
+  (global-auto-revert-mode t)
+#+END_SRC
+*** Dired
+Por defecto, =dired= crea un nuevo /buffer/ cada vez que se da =RET= en una carpeta. Si no se quiere abrir tantos /buffers/, una opción es usar =dired-find-alternate-file= (mapeado por defecto a =a=) en lugar de de =dired-find-file= (mapeado por defecto a =RET=). Sin embargo, esta función está deshabilitada porque los usuarios la encontraban confusa. Para habilitarla por defecto y evitar el diálogo de confirmación se debe ejecutar:
+
+#+begin_src emacs-lisp
+  (put 'dired-find-alternate-file 'disabled nil)
+#+end_src
+
+
+#+begin_src emacs-lisp
+  (use-package all-the-icons-dired
+    :hook (dired-mode . all-the-icons-dired-mode))
+#+end_src
+
+*** Emacs Dashboard
+Uso [[https://github.com/emacs-dashboard/emacs-dashboard][Emacs dashboard]] para generar la pantalla de inicio en emacs. 
+#+BEGIN_SRC emacs-lisp
+  (use-package dashboard
+    :init
+    (setq dashboard-items '((recents  . 5)
+                            (bookmarks . 5)
+                            (projects . 5)
+                                          ;(registers . 5)
+                            (agenda . 5)))
+    (setq dashboard-show-shortcuts t)
+    (setq dashboard-set-heading-icons t)
+    (setq dashboard-set-file-icons t)
+    (setq dashboard-set-file-icons t)
+    (setq dashboard-center-content t)
+    :config
+    (add-to-list 'recentf-exclude ; Excluir de recentf archivos que no quiero ver en dasboard
+                 (expand-file-name "~/.emacs.d/excorporate/diary-excorporate-transient"))
+    (add-to-list 'recentf-exclude ; Excluir de recentf archivos que no quiero ver en dasboard
+                 (expand-file-name "~/.emacs.d/bookmarks"))
+    (add-to-list 'recentf-exclude ; Excluir de recentf archivos que no quiero ver en dasboard
+                 (expand-file-name "~/.emacs.d/excorporate/diary-excorporate-today"))
+    (add-to-list 'recentf-exclude ; Excluir de recentf archivos que no quiero ver en dasboard
+                 (expand-file-name "~/.orhc-bibtex-cache"))
+    (add-to-list 'recentf-exclude ; Excluir de recentf archivos que no quiero ver en dasboard
+                 (expand-file-name "~/.emacs.d/diary"))
+    (dashboard-setup-startup-hook))
+#+END_SRC   
+
+*** Yasnippet
+Yasnippet es un paquete que permite la definición de /snippets/ (o plantillas) y su utilización en diferentes modos. Por defecto, no trae plantillas definidas; si se quieren plantillas, se debe agregar el paquete =yasnippet-snippets= que trae una colección de plantillas predefinidas para modos populares.
+
+#+begin_src emacs-lisp
+  (use-package yasnippet
+    :defer 1
+    :diminish yas-minor-mode
+    :config (yas-global-mode)
+    (use-package yasnippet-snippets
+      :after yasnippet
+      :config (yasnippet-snippets-initialize))
+    (yas-reload-all))
+#+end_src
+La definición de plantillas se hace a partir de un archivo de texto plano que se guarda en =.emacs.d/snippets/<mode>/=. 
+
+*** Doom modeline
+#+begin_src emacs-lisp
+  (use-package doom-modeline
+    :init (doom-modeline-mode 1) ; Activar doom-modeline en todos los modos
+    :config
+    (setq doom-modeline-modal-icon nil)) ; Usar letras en lugar de íconos para indicar el modo de edición 
+#+End_src
+
+*** Rainbow delimiters
+#+begin_src emacs-lisp
+  (use-package rainbow-delimiters
+    :defer 1
+    :init
+    (add-hook 'prog-mode-hook 'rainbow-delimiters-mode))
+#+end_src
+
+*** Helpful
+Helpful es un paquete que mejora los /buffers/ de ayuda estándares de Emacs. Es usado en Doom emacs.
+#+begin_src emacs-lisp
+  (use-package helpful
+    :defer 2
+    :custom
+    (counsel-describe-function-function #'helpful-callable)
+    (counsel-describe-variable-function #'helpful-variable))
+#+end_src
+
+*** Configuración de tema gráfico
+Luego de leer https://observer.com/2015/02/meet-the-man-behind-solarized-the-most-important-color-scheme-in-computer-history/, me decidí por Solarized como tema gráfico.
+
+Intenté con solarized-themes, pero usaba fuente no-mono y además los colores en orgmode eran horribles. 
+
+Instalación y activación:
+#+BEGIN_SRC emacs-lisp
+  (if (display-graphic-p)
+      (use-package doom-themes
+        :config
+        ;; Global settings (defaults)
+        (setq doom-themes-enable-bold t    ; if nil, bold is universally disabled
+              doom-themes-enable-italic t) ; if nil, italics is universally disabled
+        (load-theme 'doom-solarized-dark t))
+    (load-theme 'misterioso t))
+#+END_SRC
+
+*** Mostrar número de líneas globalmente
+#+BEGIN_SRC emacs-lisp
+  (global-display-line-numbers-mode)
+#+END_SRC
+
+*** All-the-icons
+Instalación de íconos para usar en [[Emacs dashboard]] y otros paquetes.
+#+BEGIN_SRC emacs-lisp
+  (use-package all-the-icons)
+#+END_SRC
+Luego de esto hay que correr =all-the-icons-install-fonts= desde emacs para instalar las fuentes.
+*** Origami
+Uso =origami= para definir bloques de contenido que sean colapsables. Inicialmente lo uso para colapsar bloques de =org-super-agenda=.
+#+BEGIN_SRC emacs-lisp
+  (use-package origami
+    :general (:keymaps 'org-super-agenda-header-map
+                       "<tab>" #'origami-toggle-node)
+    :config
+
+    :hook ((org-agenda-mode . origami-mode)))
+#+END_SRC 
+
+*** ibuffer
+#+BEGIN_SRC emacs-lisp
+  (use-package ibuffer
+    :config
+    (add-to-list 'evil-normal-state-modes 'ibuffer-mode))
+#+END_SRC
+** magit
+#+begin_src emacs-lisp
+  (use-package magit
+    :defer 1
+    :config )
+#+end_src
+** projectile
+#+begin_src emacs-lisp
+  (use-package projectile
+    :custom
+    ((projectile-enable-caching t) ; Habilitar cache de archivos de proyecto para acelerar 
+     (projectile-globally-ignored-files '("*.org~")) ; extensiones de archivo a ignorar globalmente
+     (projectile-completion-system 'ivy)) ;Usar ivy como motor de terminación
+    :config
+    (projectile-mode)
+    (setq projectile-enable-caching t) 
+    (use-package counsel-projectile
+      :config
+      (counsel-projectile-mode)))
+#+end_src
+** Org-mode
+Orgmode es mi herramienta principal de trabajo. Lo uso para gestión de tareas, conocimiento, construcción de documentos, entre otros.
+
+*** Configuración básica de orgmode
+#+begin_src emacs-lisp
+  (setq org-return-follows-link t ; RET se usa para seguir links en orgmode
+        org-startup-folded t ;Colapsar contenido al abrir un archivo .org
+        org-startup-align-all-table t ; Empezar con las tablas colapsadas
+        org-startup-indented t ; Activar org-indent-mode por defecto 
+        org-tags-column 0) ; Quitar espacio entre título y etiquetas
+  (add-hook 'org-mode-hook ; Desactivar electric-indent-local-mode en orgmode
+            (lambda () (electric-indent-local-mode -1)))
+  (setf (alist-get 'file org-link-frame-setup) #'find-file) ; Abrir links en la misma ventana
+#+end_src
+   
+**** Estados de tareas personalizados
+#+begin_src emacs-lisp
+  (setq org-todo-keywords
+        '((sequence "TODO(t)" "IDEA(i)" "NEXT(n)" "ESPE(e)" "PROY(p)" "|" "DONE(d)")
+          (sequence "|" "CANC(c)" "FUTU(f)")))
+  (setq org-todo-keyword-faces
+        '(("IDEA" . (:foreground "#268bd2" :weight bold))
+          ("PROY" . (:foreground "#d33682" :weight bold))
+          ("NEXT" . (:foreground "#dc322f" :weight bold))
+          ("ESPE" . (:foreground "#b58900" :weight bold))
+          ("DONE" . (:foreground "#859900" :weight bold))
+          ("CANC" . (:foreground "#859900" :weight bold))
+          ("FUTU" . (:foreground "#2aa198" :weight bold))
+          ("TODO" . (:foreground "#6c71c4" :weight bold))))
+#+end_src
+**** Definición de etiquetas
+#+begin_src emacs-lisp
+  (setq org-tag-persistent-alist
+        '(("@Casa" . ?c)
+          ("@Oficina" . ?o)
+          ("@PC" . ?p)
+          ("@Internet" . ?i)
+          ("@Lectura" . ?l)
+          ("@Calle" . ?k)
+          ("@Noche" . ?h)
+          ("@Transmi" . ?t)
+          ("#Docencia" . ?d)
+          ("#Carrera" . ?u)
+          ("#DevP" . ?v)
+          ("#ProyPer" . ?y)
+          ("#Ciclismo" . ?f)
+          ("#IngresoAdicional" . ?s)
+          ("#Puntos" . ?n)
+          ("Urgente" . ?g)
+          ("Corta" . ?r)
+          ("PasarBalon" . ?b)))
+#+end_src
+**** Autocompletar rutas en links
+Se puede usar company mode para completar rutas al crear links en orgmode. Sin embargo, pasando el argumento universal a =org-insert-link= se logra un resultado igual o mejor porque puedo buscar de forma más inteligente.
+#+BEGIN_SRC emacs-lisp
+                                          ;(with-eval-after-load org (set-company-backend! 'org-mode 'company-files))
+#+END_SRC
+
+**** Bitácora de tareas repetidas
+Cada vez que marco como completada (o cancelada) una tarea con repetición, se guarda una línea de cambio de estado en el cuerpo de la tarea. Para que estas líneas de cambio de estado se guarden dentro de un /drawer/ (logrando tareas más limpias), se modifica el valor de la variable =org-log-into-drawer=. Esta variable acepta como parámetro el nombre del cajón en donde se quiere guardar las líneas de cambio de estado. También acepta =t=, usando LOGBOOK como nombre por defecto del cajón.
+
+#+BEGIN_SRC emacs-lisp
+  (setq org-log-into-drawer "BITÁCORA")
+                                          ;(setq org-log-into-drawer t)
+#+END_SRC
+**** Indentación de bloques de código
+#+BEGIN_SRC emacs-lisp
+  (setq org-src-tab-acts-natively t)
+#+END_SRC
+**** Habilitar listas ordenadas con letras
+Orgmode no permite, por defecto, usar letras para los elementos de listas ordenadas. Para activar este compratamiento, hay que asignar la variable =org-list-allow-alphabetical=. Como ya se tiene cargado orgmode, hay que ejecutar =org-element-update-syntax= para que el cambio surja efecto.
+#+begin_src emacs-lisp
+  (setq org-list-allow-alphabetical t)
+  (org-element-update-syntax)
+#+end_src
+**** Habilitar =org-table-header-line-mode=
+=org-table-header-line-mode= fue incluido en =org= 9.4 y sirve para mostrar, de forma permanente, la primera fila con texto de una tabla a medida que se navega. Es equivalente a congelar la primera fila en editores como LibreOffice calc.
+#+begin_src emacs-lisp
+  (setq org-table-header-line-p t)
+#+end_src
+ 
+*** org-superstar-mode
+=org-superstar= es un paquete que mejora el aspecto visual de archivos =org=. En concreto, lo que hace es 
+#+begin_src emacs-lisp
+  (use-package org-superstar
+    :config
+    (add-hook 'org-mode-hook
+              (lambda ()
+                (org-superstar-mode 1))))
+#+end_src
+   
+*** Org-refile
+Configuración necesaria para que org-refile tome en cuenta elementos hasta de nivel 4 en el archivo actual. 
+#+BEGIN_SRC emacs-lisp
+  ;; Destinos hasta de nivel 3
+  (setq org-refile-targets '((org-agenda-files :maxlevel . 3)))
+  ;; Construcción del destino paso a paso
+  (setq org-refile-use-outline-path 'file)
+  (setq org-outline-path-complete-in-steps nil)
+#+END_SRC
+
+*** Hábitos
+Para hacer definición y rastreo de hábitos uso un módulo de =org-mode= llamado =org-habit=. Se usa =ol-habit= en lugar de =org-habit= porque desde la versión 9.3 de =org= se cambió el nombre de los paquetes.
+#+BEGIN_SRC emacs-lisp
+  (add-to-list 'org-modules 'ol-habit)
+#+END_SRC
+*** org-edna
+=org-edna= ofrece funcionalidades para generar dependencias entre tareas en =org=. Lo hace a través de definir disparadores (/trigger/) y bloqueadores (/blocker/) en las tareas, y una serie de acciones muy completa. Los /triggers/ se evaluan cada vez que una actividad se marca como completa. Cada /trigger/ debe tener un espacio de aplicación y una acción a ejecutar en cada tarea que esté dentro del espacio de aplicación.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package org-edna
+    :config
+    (org-edna-mode))
+#+END_SRC
+
+*** Prioridades
+#+BEGIN_SRC emacs-lisp
+  ;; Prioridades de A a D
+  (setq org-highest-priority ?A)
+  (setq org-default-priority ?D)
+  (setq org-lowest-priority ?D)
+  ;; Colores para las prioridades
+  (setq org-priority-faces '((?A . (:foreground "#dc322f" :weight bold))
+                             (?B . (:foreground "#b58900" :weight bold))
+                             (?C . (:foreground "#2aa198"))
+                             (?D . (:foreground "#859900"))))
+#+END_SRC
+
+*** Acordes locales de org-mode
+**** Baśicos
+#+BEGIN_SRC emacs-lisp
+  (local-leader
+    :states '(normal insert emacs)
+    :keymaps 'org-mode-map
+    "t" '(org-todo :which-key "change TODO state")
+    "a" '(org-archive-subtree-default :which-key "archieve subtree")
+    "e" '(org-export-dispatch :which-key "export")
+    "p" '(org-priority :which-key "set priority")
+    "w" '(org-copy-special :which-key "org-copy-special")
+    "D" '(org-insert-drawer :which-key "org-insert-drawer")
+    "y" '(org-paste-special :which-key "org-paste-special")
+    "q" '(org-set-tags-command :which-key "set tags")
+    "r" '(org-refile :which-key "refile")
+    "o" '(org-set-property :which-key "set property"))
+
+  (general-define-key
+   :states '(normal insert emacs)
+   :keymaps 'org-mode-map
+   "TAB" '(org-cycle :which-key "org-cycle"))     (general-define-key
+   :states '(normal)
+   :keymaps 'org-mode-map
+   "RET" '(j/dwim-at-point :which-key "org-return"))
+
+#+END_SRC
+
+**** De agenda
+Para que =org-agenda= arranque en modo visual de evil, tenemos que agregarlo a =evil-visual-state-modes=.
+#+BEGIN_SRC emacs-lisp
+  (add-to-list 'evil-normal-state-modes 'org-agenda-mode)
+#+END_SRC
+
+También es importante deshabilitar =org-super-agenda-map= para evitar bindings por defecto en encabezados de =org-super-agenda=. En particular, si no se deshabilita esto, no se pueden usar los bindigs para movimiento de evil en encabezados de =org-super-agenda=.
+#+BEGIN_SRC emacs-lisp
+  (setq org-super-agenda-header-map (make-sparse-keymap))
+#+END_SRC
+    
+#+BEGIN_SRC emacs-lisp
+  (general-define-key
+   :states '(normal insert emacs)
+   :keymaps 'org-agenda-mode-map
+   "i" '(org-agenda-clock-in :which-key "Clock-in")
+   "o" '(org-agenda-clock-out :which-key "Clock-out")
+   "g" '(org-agenda-clock-goto :which-key "Go to clocked task")
+   "c" '(org-agenda-clock-cancel :which-key "Cancel clock")
+   "e" '(org-agenda-set-effort :which-key "Set effort estimate")
+   "d" '(org-agenda-entry-text-mode :which-key "Display task text")
+   "t" '(org-agenda-todo :which-key "change TODO state")
+   "q" '(org-agenda-quit :which-key "quit")
+   "RET" '(org-agenda-switch-to :which-key "go to task")
+   "a" '(org-agenda-archive :which-key "archieve")
+   "Q" '(org-agenda-set-tags :which-key "set tags")
+   "r" '(org-agenda-redo :which-key "refresh agenda")
+   "s" '(org-save-all-org-buffers :which-key "save org buffers")
+   "I" '(org-clock-in-last :which-key "Clock in last"))
+#+END_SRC
+
+**** De reloj
+#+BEGIN_SRC emacs-lisp
+  (local-leader
+    :states '(normal insert emacs)
+    :keymaps 'org-mode-map
+    :infix "c"
+    "" '(:ignore t :which-key "Clock functions")
+    "i" '(org-clock-in :which-key "Clock-in")
+    "o" '(org-clock-out :which-key "Clock-out")
+    "g" '(org-clock-goto :which-key "Go to clocked task")
+    "c" '(org-clock-cancel :which-key "Cancel clock")
+    "d" '(org-clock-display :which-key "display clocked time")
+    "e" '(org-set-effort :which-key "Set effort estimate")
+    "E" '(org-clock-modify-effort-estimate :which-key "Modify effort")
+    "I" '(org-clock-in-last :which-key "Clock in last"))
+#+END_SRC
+
+**** De pie de página
+#+begin_src emacs-lisp
+  (local-leader
+    :states '(normal insert emacs)
+    :keymaps 'org-mode-map
+    :infix "f"
+    "" '(:ignore t :which-key "Pie de página")
+    "f" '(org-footnote-new :which-key "agregar pie de página")
+    "n" '(org-footnote-normalize :which-key "normalizar pie de página"))
+#+end_src
+
+**** De enlace
+#+BEGIN_SRC emacs-lisp
+  (local-leader
+    :states '(normal insert emacs)
+    :keymaps 'org-mode-map
+    :infix "l"
+    "" '(:ignore t :which-key "link functions")
+    "l" '(org-insert-link :which-key "org-insert-link")
+    "o" '(org-open-at-point :which-key "org-open-at-point"))
+#+END_SRC
+
+**** De calendario
+#+BEGIN_SRC emacs-lisp
+  (local-leader
+    :states '(normal insert emacs)
+    :keymaps 'org-mode-map
+    :infix "d"
+    "" '(:ignore t :which-key "date functions")
+    "d" '(org-deadline :which-key "org-deadline")
+    "s" '(org-schedule :which-key "org-schedule")
+    "f" '(j/org-set-futu :which-key "j/org-set-futu") 
+    "t" '(org-time-stamp-inactive :which-key "org-time-stamp-inactive"))
+#+END_SRC
+
+**** De movimiento
+#+BEGIN_SRC emacs-lisp
+  (general-define-key
+   :states '(normal)
+   :keymaps 'org-mode-map
+   "H" '(outline-up-heading :which-key "go to parent heading")
+   "j" '(evil-next-visual-line :which-key "evil-next-visual-line")
+   "k" '(evil-previous-visual-line :which-key "evil-previous-visual-line")
+   "J" '(evil-next-line :which-key "evil-next-line")
+   "K" '(evil-previous-line :which-key "evil-previous-line"))
+#+END_SRC
+**** De tabla 
+#+BEGIN_SRC emacs-lisp
+  (local-leader
+    :states '(normal insert emacs)
+    :keymaps 'org-mode-map
+    :infix "b"
+    "" '(:ignore t :which-key "date functions")
+    "c" '(org-table-convert :which-key "org-table-convert")
+    "TAB" '(org-table-shrink :which-key "org-table-shrink")
+    "d" '(org-edit-special :which-key "org-edit-special"))
+
+  ;; (local-leader
+  ;;   :states '(normal insert emacs)
+  ;;   :keymaps 'table-cell-map
+  ;;   :infix "b"
+  ;;   "" '(:ignore t :which-key "table functions")
+  ;;   "p" '(table-span-cell :which-key "table-span-cell")
+  ;;   "f" '(table-justify :which-key "table-justify")
+  ;;   "j" '(table-heighten-cell :which-key "table-heighten-cell")
+  ;;   "k" '(table-shorten-cell :which-key "table-shoren-cell")
+  ;;   "s" '(table-split-cell-horizontally :which-key "table-split-cell-horizontally")
+  ;;   "v" '(table-split-cell-vertically :which-key "table-split-cell-vertically")
+  ;;   "i" '(table-insert-row-column :which-key "table-insert-row-column")
+  ;;   "<" '(table-narrow-cell :which-key "table-narrow-cell")
+  ;;   ">" '(table-widen-cell :which-key "table-widen-cell"))
+#+END_SRC
+
+*** dwim
+La siguiente función dwim (do what I mean) se toma del [[https://github.com/hlissner/doom-emacs/blob/develop/modules/lang/org/autoload/org.el#L147][código de Doom]]. Se le modifica el nombre para conservar convención de nombramiento de funciones propias.
+#+begin_src emacs-lisp
+  (defun j/dwim-at-point (&optional arg)
+    "Do-what-I-mean at point.
+  If on a:
+  - checkbox list item or todo heading: toggle it.
+  - clock: update its time.
+  - headline: cycle ARCHIVE subtrees, toggle latex fragments and inline images in
+    subtree; update statistics cookies/checkboxes and ToCs.
+  - footnote reference: jump to the footnote's definition
+  - footnote definition: jump to the first reference of this footnote
+  - table-row or a TBLFM: recalculate the table's formulas
+  - table-cell: clear it and go into insert mode. If this is a formula cell,
+    recaluclate it instead.
+  - babel-call: execute the source block
+  - statistics-cookie: update it.
+  - latex fragment: toggle it.
+  - link: follow it
+  - otherwise, refresh all inline images in current tree."
+    (interactive "P")
+    (let* ((context (org-element-context))
+           (type (org-element-type context)))
+      ;; skip over unimportant contexts
+      (while (and context (memq type '(verbatim code bold italic underline strike-through subscript superscript)))
+        (setq context (org-element-property :parent context)
+              type (org-element-type context)))
+      (pcase type
+        (`headline
+         (cond ((memq (bound-and-true-p org-goto-map)
+                      (current-active-maps))
+                (org-goto-ret))
+               ((and (fboundp 'toc-org-insert-toc)
+                     (member "TOC" (org-get-tags)))
+                (toc-org-insert-toc)
+                (message "Updating table of contents"))
+               ((string= "ARCHIVE" (car-safe (org-get-tags)))
+                (org-force-cycle-archived))
+               ((or (org-element-property :todo-type context)
+                    (org-element-property :scheduled context))
+                (org-todo
+                 (if (eq (org-element-property :todo-type context) 'done)
+                     (or (car (+org-get-todo-keywords-for (org-element-property :todo-keyword context)))
+                         'todo)
+                   'done))))
+         ;; Update any metadata or inline previews in this subtree
+         (org-update-checkbox-count)
+         (org-update-parent-todo-statistics)
+         (when (and (fboundp 'toc-org-insert-toc)
+                    (member "TOC" (org-get-tags)))
+           (toc-org-insert-toc)
+           (message "Updating table of contents"))
+         (let* ((beg (if (org-before-first-heading-p)
+                         (line-beginning-position)
+                       (save-excursion (org-back-to-heading) (point))))
+                (end (if (org-before-first-heading-p)
+                         (line-end-position)
+                       (save-excursion (org-end-of-subtree) (point))))
+                (overlays (ignore-errors (overlays-in beg end)))
+                (latex-overlays
+                 (cl-find-if (lambda (o) (eq (overlay-get o 'org-overlay-type) 'org-latex-overlay))
+                             overlays))
+                (image-overlays
+                 (cl-find-if (lambda (o) (overlay-get o 'org-image-overlay))
+                             overlays)))
+           (+org--toggle-inline-images-in-subtree beg end)
+           (if (or image-overlays latex-overlays)
+               (org-clear-latex-preview beg end)
+             (org--latex-preview-region beg end))))
+
+        (`clock (org-clock-update-time-maybe))
+
+        (`footnote-reference
+         (org-footnote-goto-definition (org-element-property :label context)))
+
+        (`footnote-definition
+         (org-footnote-goto-previous-reference (org-element-property :label context)))
+
+        ((or `planning `timestamp)
+         (org-follow-timestamp-link))
+
+        ((or `table `table-row)
+         (if (org-at-TBLFM-p)
+             (org-table-calc-current-TBLFM)
+           (ignore-errors
+             (save-excursion
+               (goto-char (org-element-property :contents-begin context))
+               (org-call-with-arg 'org-table-recalculate (or arg t))))))
+
+        (`table-cell
+         (org-table-blank-field)
+         (org-table-recalculate arg)
+         (when (and (string-empty-p (string-trim (org-table-get-field)))
+                    (bound-and-true-p evil-local-mode))
+           (evil-change-state 'insert)))
+
+        (`babel-call
+         (org-babel-lob-execute-maybe))
+
+        (`statistics-cookie
+         (save-excursion (org-update-statistics-cookies arg)))
+
+        ((or `src-block `inline-src-block)
+         (org-babel-execute-src-block arg))
+
+        ((or `latex-fragment `latex-environment)
+         (org-latex-preview arg))
+
+        (`link
+         (let* ((lineage (org-element-lineage context '(link) t))
+                (path (org-element-property :path lineage)))
+           (if (or (equal (org-element-property :type lineage) "img")
+                   (and path (image-type-from-file-name path)))
+               (+org--toggle-inline-images-in-subtree
+                (org-element-property :begin lineage)
+                (org-element-property :end lineage))
+             (org-open-at-point arg))))
+
+        ((guard (org-element-property :checkbox (org-element-lineage context '(item) t)))
+         (let ((match (and (org-at-item-checkbox-p) (match-string 1))))
+           (org-toggle-checkbox (if (equal match "[ ]") '(16)))))
+
+        (_
+         (if (or (org-in-regexp org-ts-regexp-both nil t)
+                 (org-in-regexp org-tsr-regexp-both nil  t)
+                 (org-in-regexp org-link-any-re nil t))
+             (call-interactively #'org-open-at-point)
+           (+org--toggle-inline-images-in-subtree
+            (org-element-property :begin context)
+            (org-element-property :end context)))))))
+
+  (defun +org--toggle-inline-images-in-subtree (&optional beg end refresh)
+    "Refresh inline image previews in the current heading/tree."
+    (let ((beg (or beg
+                   (if (org-before-first-heading-p)
+                       (line-beginning-position)
+                     (save-excursion (org-back-to-heading) (point)))))
+          (end (or end
+                   (if (org-before-first-heading-p)
+                       (line-end-position)
+                     (save-excursion (org-end-of-subtree) (point)))))
+          (overlays (cl-remove-if-not (lambda (ov) (overlay-get ov 'org-image-overlay))
+                                      (ignore-errors (overlays-in beg end)))))
+      (dolist (ov overlays nil)
+        (delete-overlay ov)
+        (setq org-inline-image-overlays (delete ov org-inline-image-overlays)))
+      (when (or refresh (not overlays))
+        (org-display-inline-images t t beg end)
+        t)))
+
+  (defun +org-get-todo-keywords-for (&optional keyword)
+    "Returns the list of todo keywords that KEYWORD belongs to."
+    (when keyword
+      (cl-loop for (type . keyword-spec)
+               in (cl-remove-if-not #'listp org-todo-keywords)
+               for keywords =
+               (mapcar (lambda (x) (if (string-match "^\\([^(]+\\)(" x)
+                                       (match-string 1 x)
+                                     x))
+                       keyword-spec)
+               if (eq type 'sequence)
+               if (member keyword keywords)
+               return keywords)))
+#+end_src
+   
+** Company
+  Company se usa para terminación en modos de programación o similares. La terminación se hace a partir de un diálogo flotante en el punto en donde se ingresa un término "terminable".
+
+  #+begin_src emacs-lisp
+    (use-package company
+      :defer 2
+      :config )
+  #+end_src
+
+** Ivy
+*** Configuración de Ivy
+**** Configuración inicial de Ivy
+Uso Ivy como framework de completitud. La configuración básica se muestra a continuación:
+#+BEGIN_SRC emacs-lisp
+  (use-package ivy
+    ;; Para que no liste a Ivy en la barra de modos activados
+    :diminish (ivy-mode . "")
+    :config
+    ;; Lo activa por defecto
+    (ivy-mode 1))
+#+END_SRC
+**** Configuración de Counsel
+Activo counsel y enlazo =M-x= a =counsel-M-x=. Con esto se logra ver los binds actuales de los comandos
+#+BEGIN_SRC emacs-lisp
+  (use-package counsel
+    :config
+    (global-set-key (kbd "M-x") 'counsel-M-x))
+#+END_SRC
+
+**** Ivy-rich y all-the-icons-ivy-rich
+Los siguientes paquetes se usan para agregar íconos a ivy. Por ejemplo, agrega íconos a la selección de buffers. 
+#+begin_src emacs-lisp
+  (use-package all-the-icons-ivy-rich
+    :init (all-the-icons-ivy-rich-mode 1))
+  (use-package ivy-rich
+    :init (ivy-rich-mode 1))
+#+end_src
+
+**** Prescient
+#+begin_src emacs-lisp
+  (use-package prescient
+    :config
+    (use-package ivy-prescient
+      :after counsel
+      :config
+      (ivy-prescient-mode)
+      (prescient-persist-mode)))
+#+end_src
+
+** evil
+*** Configuración básica
+Es necesario instalar y configurar =general=. =General= es un paquete que permite la definición de acordes usando teclas lideres (globales y locales) para diferentes modos (e.g. emacs, normal, insert, etc).
+#+BEGIN_SRC emacs-lisp
+  (use-package general
+    :config
+    ;; defniciión de tecla lider global para modo normal.
+    (general-create-definer leader
+      ;; :prefix leader
+      :states '(normal insert emacs)
+      :keymaps 'override
+      :prefix "SPC"
+      ;; tecla lider desde modos diferente a normal.
+      :non-normal-prefix "M-SPC")
+    ;; definición de tecla lider local (relativo al major mode) para modo normal.
+    (general-create-definer local-leader
+      ;; prefix local-leader.
+      :states '(normal insert emacs)
+      :prefix "SPC m"
+      ;; tecla lider local desde modos diferentes a normal
+      :non-normal-prefix "M-SPC m"))
+#+END_SRC 
+
+Ahora se carga =evil= y se hace la configuración inicial.
+#+BEGIN_SRC emacs-lisp
+  (use-package evil
+    :config
+    ;; Iniciar en modo NORMAL por defecto para todos los modos
+    (setq evil-default-state 'normal)
+    ;; Agregar modos extraños (que empiezan en E o M) a lista de modos visuales
+    (add-to-list 'evil-normal-state-modes 'help-mode)
+    (add-to-list 'evil-normal-state-modes 'help-mode)
+    (j/carga-condicional "pdf" 
+                         (add-to-list 'evil-normal-state-modes 'pdf-view-mode))
+    ;; Arrancar emacs con evil-mode por defecto.
+    (evil-mode))
+#+END_SRC
+
+*** Evil-mc
+Evil-mc es un paquete que permite la creación de multiples cursores cuando se usa evil-mode. Esto se puede usar para hacer ediciones simultáneas en múltiples puntos del mismo /buffer/.
+
+#+BEGIN_SRC emacs-lisp
+  (use-package evil-mc
+    :config
+    (global-evil-mc-mode  1))
+#+END_SRC
+
+*** Acordes globales
+**** Operaciones sobre archivos
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "f"
+    "" '(:ignore t :which-key "file")
+    "f" '(counsel-find-file :which-key "find-file")
+    "F" '(counsel-recentf :which-key "recentf")
+    "s" '(save-buffer :which-key "save-buffer")
+    "d" '(j/delete-file-and-buffer :which-key "j/delete-file-and-buffer")
+    "S" '(write-file :which-key "write-file"))
+#+END_SRC
+
+Algunas opciones de menú de archivo requieren funciones auxiliares:
+#+BEGIN_SRC emacs-lisp
+  (defun j/delete-file-and-buffer ()
+    "Eliminar el archivo actual del disco duro y cierra su buffer"
+    (interactive)
+    (let ((filename (buffer-file-name)))
+      (if filename
+          (if (y-or-n-p (concat "Do you really want to delete file " filename " ?"))
+              (progn
+                (delete-file filename)
+                (message "Deleted file %s." filename)
+                (kill-buffer)))
+        (message "Not a file visiting buffer!"))))
+#+END_SRC
+
+**** Operaciones sobre ventanas
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "w"
+    "" '(:ignore t :which-key "window")
+    "d" '(evil-window-delete :which-key "evil-window-delete")
+    "s" '(evil-window-split :which-key "evil-window-split")
+    "<" '(evil-window-decrease-width :which-key "reducir ancho")
+    ">" '(evil-window-increase-width :which-key "aumentar ancho")
+    "j" '(evil-window-down :which-key "evil-window-down")
+    "q" '(evil-quit-all :which-key "salir de emacs")
+    "k" '(evil-window-up :which-key "evil-window-up")
+    "h" '(evil-window-left :which-key "evil-window-left")
+    "l" '(evil-window-right :which-key "evil-window-right")
+    "o" '(delete-other-windows :which-key "delete-other-window")
+    "TAB" '(evil-window-next :which-key "evil-window-next")
+    "v" '(evil-window-vsplit :which-key "evil-window-vsplit"))
+#+END_SRC
+
+**** Operaciones sobre buffers
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "b"
+    "" '(:ignore t :which-key "buffer")
+    "d" '(kill-this-buffer :which-key "kill-this-buffer")
+    "k" '(previous-buffer :which-key "previous-buffer")
+    "-" '(text-scale-adjust :which-key "reducir fuente")
+    "+" '(text-scale-adjust :which-key "aumentar fuente")
+    "r" '(revert-buffer :which-key "revert-buffer")
+    "v" '(visual-line-mode :which-key "visual-line-mode")
+    "b" '(counsel-switch-buffer :which-key "ivy-switch-buffer")
+    "l" '(evil-switch-to-windows-last-buffer :which-key "evil-switch-to-windows-last-buffer")
+    "j" '(next-buffer :which-key "next-buffer"))
+#+END_SRC
+
+#+RESULTS:
+   
+**** Projectile
+#+begin_src emacs-lisp
+  (leader
+    "p" '(:keymap projectile-command-map :which-key "projectile"))
+#+end_src
+**** Menú de ayuda
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "h"
+    "" '(:ignore t :which-key "Help")
+    "m" '(describe-mode :which-key "describe-mode")
+    "f" '(counsel-describe-function :which-key "describe-function")
+    "v" '(counsel-describe-variable :which-key "describe-veariable")
+    "K" '(describe-key-briefly :which-key "describe-key-briefly")
+    "w" '(where-is :which-key "where-is")
+    "F" '(counsel-describe-face :which-key "describe-face")
+    "c" '(j/abrir-config :which-key "j/abrir-config")
+    "k" '(helpful-key :which-key "describe-key"))
+#+END_SRC
+
+Para completar algunas de las opciones definidas en el menú de ayuda se necesitan funciones auxiliares:
+
+#+BEGIN_SRC emacs-lisp
+  (defun j/abrir-config ()
+    "Abre el archivo de configuración"
+    (interactive)
+    (find-file "~/.emacs"))
+#+END_SRC
+    
+**** Operaciones sobre modos de edición
+#+BEGIN_SRC emacs-lisp
+  (leader
+    "SPC" '(evil-normal-state :which-key "evil-normal-state"))
+#+END_SRC
+**** Inserción de plantilla con =yasnippet=
+#+BEGIN_SRC emacs-lisp
+  (leader
+    "y" '(yas-insert-snippet :which-key "insertar plantilla"))
+#+END_SRC
+**** Edición
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "e"
+    "" '(:ignore t :which-key "edición")
+    "e" '(j/zen-mode :which-key "Zen mode"))
+#+END_SRC
+
+**** Movimiento
+Mapa de movimiento general (cualquier modo)
+#+begin_src emacs-lisp
+  (general-define-key
+   :states '(normal)
+   :infix "g"
+   "h" '(evil-beginning-of-line :which-key "evil-beginning-of-line")
+   "J" '(evil-goto-first-line :which-key "evil-goto-first-line")
+   "K" '(end-of-buffer :which-key "end-of-buffer")
+   "l" '(evil-end-of-line :which-key "evil-end-of-line"))
+#+end_src
+
+#+RESULTS:
+
+*** Menú de accesos directos
+#+BEGIN_SRC emacs-lisp
+  (leader
+    :infix "o"
+    "" '(:ignore t :which-key "open")
+    "a" '(org-agenda :which-key "agenda")
+    "d" '(dired :which-key "dired")
+    "b" '(eshell :which-key "eshell")
+    "t" '(org-todo-list :which-key "full TO-DO list"))
+#+END_SRC
+
+*** Acordes locales
+**** dashboard
+#+begin_src emacs-lisp 
+  (general-define-key
+   :states '(normal insert emacs)
+   :keymaps 'dashboard-mode-map
+   ;; Marcas 
+   "r" '(j/dashboard-goto-recent-files :which-key "archivos recientes")
+   "m" '(j/dashboard-goto-bookmarks :which-key "bookmarks")
+   "p" '(j/dashboard-goto-projects :which-key "projects")
+   "a" '(j/dashboard-goto-agenda :which-key "agenda"))
+
+  (defun j/dashboard-goto-recent-files ()
+    "Go to recent files."
+    (interactive)
+    (funcall (local-key-binding "r")))
+
+  (defun j/dashboard-goto-projects ()
+    "Go to projects."
+    (interactive)
+    (funcall (local-key-binding "p")))
+
+  (defun j/dashboard-goto-bookmarks ()
+    "Go to bookmarks."
+    (interactive)
+    (funcall (local-key-binding "m")))
+
+  (defun j/dashboard-goto-agenda ()
+    "Go to agenda."
+    (interactive)
+    (funcall (local-key-binding "a")))
+#+end_src
+
+**** helpful
+#+begin_src emacs-lisp
+  (general-define-key
+   :states '(normal insert emacs)
+   :keymaps '(helpful-mode-map)
+   "g" '(helpful-update :which-key "helpful-update")
+   "RET" '(helpful-visit-reference :which-key "seguir referencia")
+   "q" '(kill-buffer-and-window :which-key "salir"))
+#+end_src
 
 
 * Footnotes
