@@ -1,0 +1,98 @@
+#+author: Juan E. Gómez-Morantes
+#+title: Configuración de Alfred
+
+* Introducción
+Alfred es un servidor personal en el que tengo los siguientes servicios:
++ Torrent box
++ NextCloud
+
+Más que un servicio pensado en producción, es un proyecto de aprendizaje y diversión.
+
+Este archivo contiene toda la configuración del servidor y de los servicios expuestos en el mismo. Esta escrito en formato de programación literaria (prosa mas código) y usa las capacidades de orgmode para ejecutar código bash y escribir archivos de configuración de diferente naturaleza.
+
+Este archivo contiene todo lo que se debe hacer para llegar, dese 0, a una configuración estable de Alfred.
+
+* Hardware actual
+La presente configuración se escribe para un Rapsberry Pi 4 B de 8 gigas de RAM usando [[https://www.raspberrypi.org/software/][Raspberry OS]] de 64 bits. Los detalles técnicos son:
++ [[https://amzn.to/39xcN6Z][Raspberry Pi 4 B de 8 gigas de ram]]
++ [[https://amzn.to/3oLoywQ][Tarjeta micro SD SanDisk Extreme de 32 Gb]]
++ [[https://amzn.to/38Jhg7o][Fuente de poder CanaKit USB-C de 5v y 3.5A]]
++ Coraza Canakit con disipadores de calor y enfriamiento activo para Rpi 4 (conectado en pines de 3 voltios para reducir ruido y consumo de energía)
+
+* Configuración inicial de hardware y sistema operativo
+Una vez se tenga ensamblado el Raspberry Pi (se recomienda usar enfriamiento activo con este [[https://amzn.to/3nLv2dX][kit]]), se debe instalar el sistema operativo. Esto se logra usando [[https://www.raspberrypi.org/software/][Raspberry Pi Imager]] (version 1.5) para instalar Ubuntu Server 20.10 LTS de 64 bits en la tarjeta micro SD.
+
+Dado que no vamos a conectar el RPi a ninguna pantalla ni teclado para hacer la configuración, tenemos que hacerlo todo por SSH. Ubuntu Server tiene habilitado por defecto el servicio de ssh[fn:1] usando el usuario ~ubuntu:ubuntu~. Para evitar problemas de seguridad, lo primero que nos va a pedir es que cambiemos la contraseña de este usuario. Si conectamos el RPi por puerto ethernet, no hay que hacer nada más por ahora.
+
+** Configuración de SSH y seguridad inicial
+Ahora tenemos que cambiar el usuario por defecto (para evitar problemas de seguridad). Esto se hace ejecutando los siguientes comandos en el RPi:
+
+#+begin_src sh
+sudo adduser juan
+sudo usermod -a -G adm,dialout,cdrom,sudo,audio,video,plugdev,games,users,input,netdev juan
+sudo pkill -u ubuntu
+sudo deluser ubuntu
+#+end_src
+
+Luego de esto, cerramos la sesión de SSH e iniciamos una nuevo con usuario ~juan~ (y nos olvidamos por ahora del usuario ~ubuntu~) para continuar con la configuración.
+
+Para actualizar el sistema operativo corremos:
+
+#+begin_src sh
+sudo apt update
+sudo apt full-upgrade
+#+end_src
+
+Es recomendable crear una tarea recurrente para mantener actualizado el paquete ~openssh-server~ con parches de seguridad. Eso se hace creando una tarea cron ejecutando:
+
+#+begin_src sh
+crontab -e 
+#+end_src
+
+y agregando la siguiente línea en el archivo mostrado[fn:2]:
+#+begin_src
+# * * * * *  command to execute
+# ┬ ┬ ┬ ┬ ┬
+# │ │ │ │ │
+# │ │ │ │ │
+# │ │ │ │ └───── day of week (0 - 7) (0 to 6 are Sunday to Saturday, or use names; 7 is Sunday, the same as 0)
+# │ │ │ └────────── month (1 - 12)
+# │ │ └─────────────── day of month (1 - 31)
+# │ └──────────────────── hour (0 - 23)
+# └───────────────────────── min (0 - 59)
+0 0 * * * apt install openssh-server
+#+end_src
+
+Para evitar ataques de diccionario con usuario ~pi~ (que no se eliminó), es buena idea desactivar el acceso de este usuario por ssh. Se hace agregando ~DenyUsers pi~ al archivo ~/etc/ssh/sshd_config~ y ejecutando:
+
+#+begin_src sh
+sudo systemctl restart ssh
+#+end_src
+
+** Firewall y fail2ban
+Como medida adicional de seguridad, vamos a instalar un /firewall/ (~[[https://www.linux.com/learn/introduction-uncomplicated-firewall-ufw][ufw]]~) y [[https://www.fail2ban.org/][fail2ban]] para que nos automatice algunas tareas de gestión del /firewall/.
+
+Los siguientes comando hacen esta instalación y configuran el /firewall/ para aceptar conexiones de ssh:
+
+#+begin_src sh
+sudo apt install ufw
+sudo ufw allow ssh/tcp
+sudo ufw enable
+sudo ufw limit ssh/tcp
+sudo apt install fail2ban
+sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+#+end_src
+
+Ahora tenemos que editar el archivo ~/etc/fail2ban/jail.local~ agregando las siguientes líneas
+
+** Software básico
+Como base para continuar con la configuración del servidor, vamos a instalar las siguientes aplicaciones:
+#+begin_src sh
+sudo apt install git emacs-nox docker
+#+end_src
+
+* Footnotes
+
+[fn:2] Las líneas de comentario se agregan para tener una explicación de la tarea cron y cuándo se va a ejecutar. 
+
+[fn:1] Se recomienda usar la aplicación movil Fing para encontrar el ip asignado al RPi en la red local. 
